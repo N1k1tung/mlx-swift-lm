@@ -1,30 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 import Foundation
-
-public enum StringOrNumber: Codable, Equatable, Sendable {
-    case string(String)
-    case float(Float)
-
-    public init(from decoder: Decoder) throws {
-        let values = try decoder.singleValueContainer()
-
-        if let v = try? values.decode(Float.self) {
-            self = .float(v)
-        } else {
-            let v = try values.decode(String.self)
-            self = .string(v)
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .string(let v): try container.encode(v)
-        case .float(let v): try container.encode(v)
-        }
-    }
-}
+import MLXLMCommon
 
 private class ModelTypeRegistry: @unchecked Sendable {
 
@@ -35,28 +12,41 @@ private class ModelTypeRegistry: @unchecked Sendable {
 
     private var creators: [String: @Sendable (Data) throws -> EmbeddingModel] = [
         "bert": { data in
-            let configuration = try JSONDecoder().decode(BertConfiguration.self, from: data)
+            let configuration = try JSONDecoder.json5().decode(BertConfiguration.self, from: data)
             return BertModel(configuration)
         },
         "roberta": { data in
-            let configuration = try JSONDecoder().decode(BertConfiguration.self, from: data)
+            let configuration = try JSONDecoder.json5().decode(BertConfiguration.self, from: data)
             return BertModel(configuration)
         },
         "xlm-roberta": { data in
-            let configuration = try JSONDecoder().decode(BertConfiguration.self, from: data)
+            let configuration = try JSONDecoder.json5().decode(BertConfiguration.self, from: data)
             return BertModel(configuration)
         },
         "distilbert": { data in
-            let configuration = try JSONDecoder().decode(BertConfiguration.self, from: data)
+            let configuration = try JSONDecoder.json5().decode(BertConfiguration.self, from: data)
             return BertModel(configuration)
         },
         "nomic_bert": { data in
-            let configuration = try JSONDecoder().decode(NomicBertConfiguration.self, from: data)
+            let configuration = try JSONDecoder.json5().decode(
+                NomicBertConfiguration.self, from: data)
             return NomicBertModel(configuration, pooler: false)
         },
         "qwen3": { data in
-            let configuration = try JSONDecoder().decode(Qwen3Configuration.self, from: data)
+            let configuration = try JSONDecoder.json5().decode(Qwen3Configuration.self, from: data)
             return Qwen3Model(configuration)
+        },
+        "gemma3": { data in
+            let configuration = try JSONDecoder.json5().decode(Gemma3Configuration.self, from: data)
+            return EmbeddingGemma(configuration)
+        },
+        "gemma3_text": { data in
+            let configuration = try JSONDecoder.json5().decode(Gemma3Configuration.self, from: data)
+            return EmbeddingGemma(configuration)
+        },
+        "gemma3n": { data in
+            let configuration = try JSONDecoder.json5().decode(Gemma3Configuration.self, from: data)
+            return EmbeddingGemma(configuration)
         },
     ]
 

@@ -3,6 +3,7 @@
 import Foundation
 @preconcurrency import Hub
 import MLX
+import MLXLMCommon
 import MLXNN
 import Tokenizers
 
@@ -120,7 +121,7 @@ func prepareModelDirectory(
 ///   - progressHandler: A closure for tracking download progress.
 /// - Returns: A tuple containing the initialized `EmbeddingModel` and `Tokenizer`.
 public func load(
-    hub: HubApi = HubApi(),
+    hub: HubApi = defaultHubApi,
     configuration: ModelConfiguration,
     progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
 ) async throws -> (EmbeddingModel, Tokenizer) {
@@ -159,7 +160,7 @@ func loadSynchronous(modelDirectory: URL, modelName: String) throws -> Embedding
 
     let baseConfig: BaseConfiguration
     do {
-        baseConfig = try JSONDecoder().decode(BaseConfiguration.self, from: configData)
+        baseConfig = try JSONDecoder.json5().decode(BaseConfiguration.self, from: configData)
     } catch let error as DecodingError {
         throw EmbedderError.configurationDecodingError(
             configurationURL.lastPathComponent, modelName, error)
@@ -217,7 +218,7 @@ func loadSynchronous(modelDirectory: URL, modelName: String) throws -> Embedding
 ///   - progressHandler: A closure for tracking download progress.
 /// - Returns: A thread-safe `ModelContainer` instance.
 public func loadModelContainer(
-    hub: HubApi = HubApi(),
+    hub: HubApi = defaultHubApi,
     configuration: ModelConfiguration,
     progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
 ) async throws -> ModelContainer {

@@ -5,16 +5,19 @@ import Foundation
 /// Parser for XML function format: <function=name><parameter=key>value</parameter></function>
 /// Reference: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/tool_parsers/qwen3_coder.py
 public struct XMLFunctionParser: ToolCallParser, Sendable {
-    public let startTag: String? = nil  // Inline format - no wrapper tags
-    public let endTag: String? = nil
+    public let startTag: String?
+    public let endTag: String?
 
-    public init() {}
+    public init(startTag: String, endTag: String) {
+        self.startTag = startTag
+        self.endTag = endTag
+    }
 
     public func parse(content: String, tools: [[String: any Sendable]]?) -> ToolCall? {
-        // Pattern: <function=(.*?)</function>
+        // Pattern: <function=(content)</function> — [\s\S] matches newlines
         guard
             let funcMatch = content.range(
-                of: #"<function=(.*?)</function>"#, options: .regularExpression)
+                of: #"<function=([\s\S]*?)</function>"#, options: .regularExpression)
         else { return nil }
 
         let funcContent = String(content[funcMatch])

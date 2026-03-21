@@ -27,7 +27,7 @@ public func downloadModel(
         case .id(let id, let revision):
             // download the model weights
             let repo = Hub.Repo(id: id)
-            let modelFiles = ["*.safetensors", "*.json"]
+            let modelFiles = ["*.safetensors", "*.json", "*.jinja"]
             return try await hub.snapshot(
                 from: repo,
                 revision: revision,
@@ -59,7 +59,8 @@ public func downloadModel(
 ///
 /// This is typically called via ``ModelFactory/load(hub:configuration:progressHandler:)``.
 /// This function loads all `safetensor` files in the given `modelDirectory`,
-/// calls ``LanguageModel/sanitize(weights:)``, applies optional quantization, and
+/// calls ``LanguageModel/sanitize(weights:metadata:)`` to allow per-model preprocessing,
+/// applies optional quantization, and
 /// updates the model with the weights.
 public func loadWeights(
     modelDirectory: URL, model: LanguageModel,
@@ -67,21 +68,25 @@ public func loadWeights(
     perLayerQuantization: BaseConfiguration.PerLayerQuantization? = nil,
     lazy: Bool = false
 ) throws {
-    // load the weights
+    // load the weights and collect metadata from the first safetensor file
     var weights = [String: MLXArray]()
+    var metadata = [String: String]()
     let enumerator = FileManager.default.enumerator(
         at: modelDirectory, includingPropertiesForKeys: nil)!
     for case let url as URL in enumerator {
         if url.pathExtension == "safetensors" {
-            let w = try loadArrays(url: url)
+            let (w, m) = try loadArraysAndMetadata(url: url)
             for (key, value) in w {
                 weights[key] = value
+            }
+            if metadata.isEmpty {
+                metadata = m
             }
         }
     }
 
-    // per-model cleanup
-    weights = model.sanitize(weights: weights)
+    // per-model cleanup (models can inspect metadata to customize behavior)
+    weights = model.sanitize(weights: weights, metadata: metadata)
 
     // quantize if needed
     if quantization != nil || perLayerQuantization != nil {

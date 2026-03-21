@@ -5,7 +5,7 @@
 //  Created by Max Kupriianov on 28.06.2025.
 //
 
-// Based on https://github.com/ml-explore/mlx-examples/blob/main/llms/mlx_lm/models/gemma3n.py
+// Based on https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/models/gemma3n.py
 
 import Foundation
 import MLX
@@ -212,7 +212,7 @@ class Gemma3nAttention: Module {
     @ModuleInfo(key: "q_norm") var qNorm: RMSNorm
     @ModuleInfo(key: "k_norm") var kNorm: RMSNorm
     @ModuleInfo(key: "v_norm") var vNorm: RMSNoScale
-    @ModuleInfo var rope: RoPE
+    @ModuleInfo var rope: OffsetLayer
 
     init(_ config: Gemma3nTextConfiguration, layerIdx: Int) {
         let layerTypes =

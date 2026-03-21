@@ -2,6 +2,7 @@
 
 import Foundation
 import MLX
+import MLXLMCommon
 import MLXNN
 
 // MARK: - NomicEmbedding
@@ -186,17 +187,13 @@ func computeBaseFrequency(
         return base
     }
 
-    guard case .float(let factor) = ropeScaling["factor"],
-        case .float(let lowFreqFactor) = ropeScaling["low_freq_factor"]
-            ?? .float(1.0),
-        case .float(let highFreqFactor) = ropeScaling["high_freq_factor"]
-            ?? .float(4.0),
-        case .float(let oldContextLen) = ropeScaling[
-            "original_max_position_embeddings"]
-            ?? .float(8192)
-    else {
+    guard let factor = ropeScaling["factor"]?.asFloat() else {
         return base
     }
+
+    let lowFreqFactor = ropeScaling["low_freq_factor"]?.asFloat() ?? 1.0
+    let highFreqFactor = ropeScaling["high_freq_factor"]?.asFloat() ?? 4.0
+    let oldContextLen = ropeScaling["original_max_position_embeddings"]?.asFloat() ?? 8192
 
     let lowFreqWavelen = oldContextLen / lowFreqFactor
     let highFreqWavelen = oldContextLen / highFreqFactor
@@ -674,7 +671,7 @@ public class NomicBertModel: Module, EmbeddingModel {
 
     /// The optional pooler layer.
     /// Used to extract a single vector representation for the whole sequence (usually from the [CLS] token).
-    let pooler: Linear?
+    @ModuleInfo var pooler: Linear?
 
     /// The stack of Transformer blocks.
     fileprivate let encoder: Encoder
@@ -699,9 +696,9 @@ public class NomicBertModel: Module, EmbeddingModel {
 
         // Initialize Pooler (for sentence embeddings)
         if pooler {
-            self.pooler = Linear(config.embedDim, config.embedDim, bias: false)
+            _pooler.wrappedValue = Linear(config.embedDim, config.embedDim, bias: false)
         } else {
-            self.pooler = nil
+            _pooler.wrappedValue = nil
         }
 
         // Initialize LM Head (for training/masked prediction)
@@ -742,18 +739,22 @@ public class NomicBertModel: Module, EmbeddingModel {
         // Operation: .log().
         //   log(1) = 0    (Add 0 to attention score -> No change)
         //   log(0) = -inf (Add -inf to attention score -> Zero probability after Softmax)
+        let embeddings = embedder(
+            inp, positionIds: positionIds, tokenTypeIds: tokenTypeIds)
         var mask = attentionMask
         if mask != nil {
-            mask = mask!.asType(embedder.wordEmbeddings.weight.dtype).expandedDimensions(axes: [
+            // Cast mask to the same dtype as the embeddings output so it is
+            // compatible with scaled_dot_product_attention's type promotion
+            // rules. Using the embedding weight dtype can produce a mismatch
+            // when Linear layers are quantized to float16 but Embedding
+            // weights remain float32.
+            mask = mask!.asType(embeddings.dtype).expandedDimensions(axes: [
                 1, 2,
             ]).log()
         }
 
         // 3. Encoder Pass
-        let outputs = encoder(
-            embedder(
-                inp, positionIds: positionIds, tokenTypeIds: tokenTypeIds),
-            attentionMask: mask)
+        let outputs = encoder(embeddings, attentionMask: mask)
 
         // 4a. Return LM Head Output (if active)
         if let lmHead {
@@ -779,16 +780,20 @@ public class NomicBertModel: Module, EmbeddingModel {
     /// - Returns: A new dictionary with keys renamed to match this Swift class structure.
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         weights.reduce(into: [:]) { result, item in
-            var key = item.key.replacingOccurrences(
-                of: "emb_ln", with: "embeddings.norm")
-            key = key.replacingOccurrences(of: "bert.", with: "")
-            key = key.replacingOccurrences(
-                of: "cls.predictions.transform.dense.", with: "lm_head.dense.")
-            key = key.replacingOccurrences(
-                of: "cls.predictions.transform.LayerNorm.", with: "lm_head.ln.")
-            key = key.replacingOccurrences(
-                of: "cls.predictions.decoder", with: "lm_head.decoder")
-            key = key.replacingOccurrences(of: "pooler.dense.", with: "pooler.")
+            let key = item.key
+                .replacingOccurrences(of: "emb_ln", with: "embeddings.norm")
+                .replacingOccurrences(of: "bert.", with: "")  // Remove namespace prefix
+                // Remap LM Head keys
+                .replacingOccurrences(
+                    of: "cls.predictions.transform.dense.", with: "lm_head.dense."
+                )
+                .replacingOccurrences(
+                    of: "cls.predictions.transform.LayerNorm.", with: "lm_head.ln."
+                )
+                .replacingOccurrences(of: "cls.predictions.decoder", with: "lm_head.decoder")
+                // Remap Pooler keys
+                .replacingOccurrences(of: "pooler.dense.", with: "pooler.")
+
             result[key] = item.value
         }
     }

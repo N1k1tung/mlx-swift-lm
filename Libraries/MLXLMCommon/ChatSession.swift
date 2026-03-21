@@ -3,6 +3,7 @@
 import CoreGraphics
 import Foundation
 import MLX
+import Tokenizers
 
 /// Simplified API for multi-turn conversations with LLMs and VLMs.
 ///
@@ -32,6 +33,8 @@ public final class ChatSession {
     public var processing: UserInput.Processing
     public var generateParameters: GenerateParameters
     public var additionalContext: [String: any Sendable]?
+    public var tools: [ToolSpec]?
+    public var toolDispatch: (@Sendable (ToolCall) async throws -> String)?
 
     /// Initialize the `ChatSession`.
     ///
@@ -40,19 +43,25 @@ public final class ChatSession {
     ///   - instructions: optional system instructions for the session
     ///   - generateParameters: parameters that control generation
     ///   - processing: media processing configuration for images/videos
+    ///   - tools: optional tool specifications
+    ///   - toolDispatch: optional tool dispatch -- required for toolcalls if streaming strings rather than details
     ///   - additionalContext: optional model-specific context
     public init(
         _ model: ModelContainer,
         instructions: String? = nil,
         generateParameters: GenerateParameters = .init(),
         processing: UserInput.Processing = .init(resize: CGSize(width: 512, height: 512)),
-        additionalContext: [String: any Sendable]? = nil
+        additionalContext: [String: any Sendable]? = nil,
+        tools: [ToolSpec]? = nil,
+        toolDispatch: (@Sendable (ToolCall) async throws -> String)? = nil
     ) {
         self.model = model
         self.instructions = instructions
         self.cache = .init(.empty)
         self.processing = processing
         self.generateParameters = generateParameters
+        self.tools = tools
+        self.toolDispatch = toolDispatch
         self.additionalContext = additionalContext
     }
 
@@ -63,19 +72,25 @@ public final class ChatSession {
     ///   - instructions: optional system instructions for the session
     ///   - generateParameters: parameters that control generation
     ///   - processing: media processing configuration for images/videos
+    ///   - tools: optional tool specifications
+    ///   - toolDispatch: optional tool dispatch -- required for toolcalls if streaming strings rather than details
     ///   - additionalContext: optional model-specific context
     public init(
         _ model: ModelContext,
         instructions: String? = nil,
         generateParameters: GenerateParameters = .init(),
         processing: UserInput.Processing = .init(resize: CGSize(width: 512, height: 512)),
-        additionalContext: [String: any Sendable]? = nil
+        additionalContext: [String: any Sendable]? = nil,
+        tools: [ToolSpec]? = nil,
+        toolDispatch: (@Sendable (ToolCall) async throws -> String)? = nil
     ) {
         self.model = ModelContainer(context: model)
         self.instructions = instructions
         self.cache = .init(.empty)
         self.processing = processing
         self.generateParameters = generateParameters
+        self.tools = tools
+        self.toolDispatch = toolDispatch
         self.additionalContext = additionalContext
     }
 
@@ -88,6 +103,8 @@ public final class ChatSession {
     ///   - history: The full array of messages to restore (including system prompt)
     ///   - generateParameters: parameters that control generation
     ///   - processing: media processing configuration for images/videos
+    ///   - tools: optional tool specifications
+    ///   - toolDispatch: optional tool dispatch -- required for toolcalls if streaming strings rather than details
     ///   - additionalContext: optional model-specific context
     public init(
         _ model: ModelContainer,
@@ -95,13 +112,17 @@ public final class ChatSession {
         history: consuming [Chat.Message],
         generateParameters: GenerateParameters = .init(),
         processing: UserInput.Processing = .init(resize: CGSize(width: 512, height: 512)),
-        additionalContext: [String: any Sendable]? = nil
+        additionalContext: [String: any Sendable]? = nil,
+        tools: [ToolSpec]? = nil,
+        toolDispatch: (@Sendable (ToolCall) async throws -> String)? = nil
     ) {
         self.model = model
         self.instructions = instructions
         self.cache = .init(.history(history))
         self.processing = processing
         self.generateParameters = generateParameters
+        self.tools = tools
+        self.toolDispatch = toolDispatch
         self.additionalContext = additionalContext
     }
 
@@ -114,6 +135,8 @@ public final class ChatSession {
     ///   - history: The full array of messages to restore (including system prompt)
     ///   - generateParameters: parameters that control generation
     ///   - processing: media processing configuration for images/videos
+    ///   - tools: optional tool specifications
+    ///   - toolDispatch: optional tool dispatch -- required for toolcalls if streaming strings rather than details
     ///   - additionalContext: optional model-specific context
     public init(
         _ model: ModelContext,
@@ -121,13 +144,17 @@ public final class ChatSession {
         history: [Chat.Message],
         generateParameters: GenerateParameters = .init(),
         processing: UserInput.Processing = .init(resize: CGSize(width: 512, height: 512)),
-        additionalContext: [String: any Sendable]? = nil
+        additionalContext: [String: any Sendable]? = nil,
+        tools: [ToolSpec]? = nil,
+        toolDispatch: (@Sendable (ToolCall) async throws -> String)? = nil
     ) {
         self.model = ModelContainer(context: model)
         self.instructions = instructions
         self.cache = .init(.history(history))
         self.processing = processing
         self.generateParameters = generateParameters
+        self.tools = tools
+        self.toolDispatch = toolDispatch
         self.additionalContext = additionalContext
     }
 
@@ -141,11 +168,14 @@ public final class ChatSession {
     nonisolated(nonsending)
     public func respond(
         to prompt: String,
+        role: Chat.Message.Role = .user,
         images: consuming [UserInput.Image],
         videos: consuming [UserInput.Video]
     ) async throws -> String {
         var output = ""
-        for try await chunk in streamResponse(to: prompt, images: images, videos: videos) {
+        for try await chunk in streamResponse(
+            to: prompt, role: role, images: images, videos: videos
+        ) {
             output += chunk
         }
         return output
@@ -161,11 +191,13 @@ public final class ChatSession {
     nonisolated(nonsending)
     public func respond(
         to prompt: String,
+        role: Chat.Message.Role = .user,
         image: UserInput.Image? = nil,
         video: UserInput.Video? = nil
     ) async throws -> String {
         try await respond(
             to: prompt,
+            role: role,
             images: image.map { [$0] } ?? [],
             videos: video.map { [$0] } ?? []
         )
@@ -180,10 +212,11 @@ public final class ChatSession {
     /// - Returns: a stream of string chunks from the model
     public func streamResponse(
         to prompt: String,
+        role: Chat.Message.Role = .user,
         images: consuming [UserInput.Image],
         videos: consuming [UserInput.Video]
     ) -> AsyncThrowingStream<String, Error> {
-        streamMap(to: prompt, images: images, videos: videos) {
+        streamMap(to: prompt, role: role, images: images, videos: videos) {
             $0.chunk
         }
     }
@@ -197,10 +230,11 @@ public final class ChatSession {
     /// - Returns: a stream of `Generation` from the model
     public func streamDetails(
         to prompt: String,
+        role: Chat.Message.Role = .user,
         images: consuming [UserInput.Image],
         videos: consuming [UserInput.Video]
     ) -> AsyncThrowingStream<Generation, Error> {
-        streamMap(to: prompt, images: images, videos: videos) {
+        streamMap(to: prompt, role: role, images: images, videos: videos) {
             $0
         }
     }
@@ -215,6 +249,7 @@ public final class ChatSession {
     /// - Returns: a stream of transformed values from the model
     private func streamMap<R: Sendable>(
         to prompt: String,
+        role: Chat.Message.Role,
         images: consuming [UserInput.Image],
         videos: consuming [UserInput.Video],
         transform: @Sendable @escaping (Generation) -> R?
@@ -224,13 +259,14 @@ public final class ChatSession {
         // images and videos are not Sendable (MLXArray) but they are consumed
         // and are only being sent to the inner async
         let message = SendableBox<Chat.Message>(
-            .user(prompt, images: images, videos: videos)
+            .init(role: role, content: prompt, images: images, videos: videos)
         )
 
         let task = Task {
             [
                 model,
-                instructions, processing, additionalContext, cache, generateParameters
+                instructions, processing, tools, toolDispatch,
+                additionalContext, cache, generateParameters
             ] in
             do {
                 try await cache.update { cache in
@@ -281,35 +317,49 @@ public final class ChatSession {
                     // prepare the input
                     messages.append(message.consume())
 
-                    let userInput = UserInput(
-                        chat: messages, processing: processing,
-                        additionalContext: additionalContext)
-                    let input = try await processor.prepare(input: userInput)
+                    // loop can restart on tool calls
+                    restart: while !messages.isEmpty {
+                        let userInput = UserInput(
+                            chat: messages, processing: processing,
+                            tools: tools, additionalContext: additionalContext)
+                        let input = try await processor.prepare(input: userInput)
+                        messages.removeAll()
 
-                    // generate output
-                    let iterator = try TokenIterator(
-                        input: input, model: model, cache: kvCache,
-                        parameters: generateParameters)
+                        // generate output
+                        let iterator = try TokenIterator(
+                            input: input, model: model, cache: kvCache,
+                            parameters: generateParameters)
 
-                    let (stream, task) = MLXLMCommon.generateTask(
-                        promptTokenCount: input.text.tokens.size,
-                        modelConfiguration: modelConfiguration,
-                        tokenizer: tokenizer,
-                        iterator: iterator
-                    )
+                        let (stream, task) = MLXLMCommon.generateTask(
+                            promptTokenCount: input.text.tokens.size,
+                            modelConfiguration: modelConfiguration,
+                            tokenizer: tokenizer,
+                            iterator: iterator
+                        )
 
-                    for await item in stream {
-                        if let value = transform(item) {
-                            if case .terminated = continuation.yield(value) {
-                                break
+                        for await item in stream {
+                            // if there is no toolDispatch then the caller must
+                            // handle the toolcall
+                            if let toolCall = item.toolCall, let toolDispatch {
+                                let toolResult = try await toolDispatch(toolCall)
+                                messages = [.tool(toolResult)]
+                                task.cancel()
+                                await task.value
+                                continue restart
+                            }
+
+                            if let value = transform(item) {
+                                if case .terminated = continuation.yield(value) {
+                                    break
+                                }
                             }
                         }
-                    }
 
-                    // wait for the task to complete -- this is important in
-                    // the case where we broke the loop early as the generation
-                    // work may continue (briefly) and use the KVCache
-                    await task.value
+                        // wait for the task to complete -- this is important in
+                        // the case where we broke the loop early as the generation
+                        // work may continue (briefly) and use the KVCache
+                        await task.value
+                    }
 
                     continuation.finish()
                 }
