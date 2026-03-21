@@ -37,6 +37,7 @@ let package = Package(
             name: "MLXLLM",
             dependencies: [
                 "MLXLMCommon",
+                .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXOptimizers", package: "mlx-swift"),
@@ -54,6 +55,7 @@ let package = Package(
             name: "MLXVLM",
             dependencies: [
                 "MLXLMCommon",
+                .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXOptimizers", package: "mlx-swift"),
@@ -70,6 +72,7 @@ let package = Package(
         .target(
             name: "MLXLMCommon",
             dependencies: [
+                .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXOptimizers", package: "mlx-swift"),
@@ -86,6 +89,7 @@ let package = Package(
         .target(
             name: "MLXEmbedders",
             dependencies: [
+                .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "Transformers", package: "swift-transformers"),
@@ -143,6 +147,7 @@ let package = Package(
         .testTarget(
             name: "Benchmarks",
             dependencies: [
+                .product(name: "Hub", package: "swift-transformers"),
                 "MLXLLM",
                 "MLXVLM",
                 "MLXLMCommon",
