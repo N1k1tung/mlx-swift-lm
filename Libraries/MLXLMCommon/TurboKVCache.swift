@@ -1191,7 +1191,7 @@ func _validateTurboBits(_ bits: Double) throws -> Double {
     return rounded
 }
 
-public func turboQuantEnabled(bits: Double?, scheme: String? = nil) -> Bool {
+public func turboQuantEnabled(bits: Float?, scheme: String? = nil) -> Bool {
     guard let bits else { return false }
     if scheme == "turboquant" {
         return true
@@ -3175,27 +3175,5 @@ public final class TurboKVCache: BaseKVCache, CustomDebugStringConvertible {
 
     public var debugDescription: String {
         "TurboKVCache(offset: \(offset), bits: \(bits), seed: \(seed))"
-    }
-}
-
-public func maybeQuantizeKVCache(
-    cache: inout [KVCache],
-    kvBits: Double?,
-    quantizedKVStart: Int = 0,
-    quantizationScheme: String? = nil
-) {
-    guard
-        let kvBits,
-        !cache.isEmpty,
-        turboQuantEnabled(bits: kvBits, scheme: quantizationScheme)
-    else { return }
-
-    for index in 0 ..< cache.count {
-        if cache[index] is TurboKVCache {
-            continue
-        }
-        if let simpleCache = cache[index] as? KVCacheSimple, simpleCache.offset > quantizedKVStart {
-            cache[index] = TurboKVCache.fromCache(simpleCache, bits: kvBits)
-        }
     }
 }

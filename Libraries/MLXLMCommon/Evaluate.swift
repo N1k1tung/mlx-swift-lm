@@ -64,7 +64,10 @@ public struct GenerateParameters: Sendable {
     public var maxKVSize: Int?
 
     /// Number of bits to use for KV cache quantization. nil implies no cache quantization.
-    public var kvBits: Int?
+    ///
+    /// Integer values use the standard uniform quantized cache path. Fractional values
+    /// such as `3.5` automatically use TurboQuant.
+    public var kvBits: Float?
 
     /// Group size for KV cache quantization (default: 64)
     public var kvGroupSize: Int
@@ -105,7 +108,7 @@ public struct GenerateParameters: Sendable {
     public init(
         maxTokens: Int? = nil,
         maxKVSize: Int? = nil,
-        kvBits: Int? = nil,
+        kvBits: Float? = nil,
         kvGroupSize: Int = 64,
         quantizedKVStart: Int = 0,
         temperature: Float = 0.6,
@@ -512,7 +515,7 @@ public struct TokenIterator: Sequence, IteratorProtocol {
     let maxTokens: Int?
 
     // Cache quantization parameters
-    let kvBits: Int?
+    let kvBits: Float?
     let kvGroupSize: Int
     let quantizedKVStart: Int
 

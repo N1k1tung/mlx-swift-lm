@@ -1557,27 +1557,40 @@ public func quantizedScaledDotProductAttention(
 ///
 /// - Parameters:
 ///   - cache: Array of KV caches to potentially quantize
-///   - kvBits: Number of bits for quantization (nil = no quantization)
+///   - kvBits: Number of bits for quantization (nil = no quantization). Fractional
+///     values use TurboQuant automatically.
 ///   - kvGroupSize: Group size for quantization
 ///   - quantizedKVStart: Token count threshold to begin quantizing
 public func maybeQuantizeKVCache(
     cache: inout [KVCache],
-    kvBits: Int?,
+    kvBits: Float?,
     kvGroupSize: Int = 64,
-    quantizedKVStart: Int = 0
+    quantizedKVStart: Int = 0,
+    quantizationScheme: String? = nil
 ) {
-    guard let kvBits = kvBits,
-        !cache.isEmpty,
-        !(cache[0] is QuantizedKVCache),
-        cache[0].offset > quantizedKVStart
-    else {
+    guard let kvBits, !cache.isEmpty else {
         return
     }
 
+    if turboQuantEnabled(bits: kvBits, scheme: quantizationScheme) {
+        for index in 0 ..< cache.count {
+            if cache[index] is TurboKVCache {
+                continue
+            }
+            if let simpleCache = cache[index] as? KVCacheSimple, simpleCache.offset > quantizedKVStart {
+                cache[index] = TurboKVCache.fromCache(simpleCache, bits: Double(kvBits))
+            }
+        }
+        return
+    }
+
+    let uniformBits = Int(kvBits.rounded())
     for i in 0 ..< cache.count {
-        // Handle cache types that support quantization
-        if let simpleCache = cache[i] as? KVCacheSimple {
-            cache[i] = simpleCache.toQuantized(groupSize: kvGroupSize, bits: kvBits)
+        if cache[i] is QuantizedKVCache {
+            continue
+        }
+        if let simpleCache = cache[i] as? KVCacheSimple, simpleCache.offset > quantizedKVStart {
+            cache[i] = simpleCache.toQuantized(groupSize: kvGroupSize, bits: uniformBits)
         }
         // TODO: RotatingKVCache.toQuantized() is not implemented yet, like in Python.
         // When implemented, add: else if let rotatingCache = cache[i] as? RotatingKVCache { ... }

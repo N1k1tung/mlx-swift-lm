@@ -17,6 +17,15 @@ public class ChatSessionIntegrationTests: XCTestCase {
     nonisolated(unsafe) static var llmContainer: ModelContainer!
     nonisolated(unsafe) static var vlmContainer: ModelContainer!
 
+    private func turboGenerateParameters(maxTokens: Int? = 32) -> GenerateParameters {
+        GenerateParameters(
+            maxTokens: maxTokens,
+            kvBits: 3.5,
+            quantizedKVStart: 0,
+            temperature: 0
+        )
+    }
+
     override public class func setUp() {
         super.setUp()
         // Load models once for all tests
@@ -51,6 +60,18 @@ public class ChatSessionIntegrationTests: XCTestCase {
         XCTAssertTrue(result.contains("4") || result.lowercased().contains("four"))
     }
 
+    func testOneShotTurboKVCache() async throws {
+        let session = ChatSession(
+            Self.llmContainer,
+            generateParameters: turboGenerateParameters()
+        )
+        let result = try await session.respond(
+            to: "In one short sentence, tell me what 2+2 is."
+        )
+        print("One-shot turbo result:", result)
+        XCTAssertTrue(result.contains("4") || result.lowercased().contains("four"))
+    }
+
     func testOneShotStream() async throws {
         let session = ChatSession(Self.llmContainer)
         var result = ""
@@ -61,6 +82,22 @@ public class ChatSessionIntegrationTests: XCTestCase {
             result += token
         }
         print()  // newline
+        XCTAssertTrue(result.contains("4") || result.lowercased().contains("four"))
+    }
+
+    func testOneShotStreamTurboKVCache() async throws {
+        let session = ChatSession(
+            Self.llmContainer,
+            generateParameters: turboGenerateParameters()
+        )
+        var result = ""
+        for try await token in session.streamResponse(
+            to: "In one short sentence, tell me what 2+2 is."
+        ) {
+            print(token, terminator: "")
+            result += token
+        }
+        print()
         XCTAssertTrue(result.contains("4") || result.lowercased().contains("four"))
     }
 
@@ -80,6 +117,25 @@ public class ChatSessionIntegrationTests: XCTestCase {
             "Model should remember the name 'Alice' from previous turn")
     }
 
+    func testMultiTurnConversationTurboKVCache() async throws {
+        let session = ChatSession(
+            Self.llmContainer,
+            instructions: "You are a helpful assistant. Keep responses brief.",
+            generateParameters: turboGenerateParameters()
+        )
+
+        let response1 = try await session.respond(to: "My name is Alice.")
+        print("Turbo response 1:", response1)
+
+        let response2 = try await session.respond(to: "What is my name? Answer in a short sentence.")
+        print("Turbo response 2:", response2)
+
+        XCTAssertTrue(
+            response2.lowercased().contains("alice"),
+            "Model should remember the name 'Alice' from previous turn with Turbo KV cache"
+        )
+    }
+
     func testVisionModel() async throws {
         let session = ChatSession(Self.vlmContainer)
 
@@ -90,6 +146,21 @@ public class ChatSessionIntegrationTests: XCTestCase {
             to: "What color is this image? Reply with just the color name.",
             image: .ciImage(redImage))
         print("Vision result:", result)
+        XCTAssertTrue(result.lowercased().contains("red"))
+    }
+
+    func testVisionModelTurboKVCache() async throws {
+        let session = ChatSession(
+            Self.vlmContainer,
+            generateParameters: turboGenerateParameters()
+        )
+
+        let redImage = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 100, height: 100))
+
+        let result = try await session.respond(
+            to: "Describe the color of this image in a short sentence.",
+            image: .ciImage(redImage))
+        print("Vision turbo result:", result)
         XCTAssertTrue(result.lowercased().contains("red"))
     }
 
@@ -190,6 +261,29 @@ public class ChatSessionIntegrationTests: XCTestCase {
         XCTAssertTrue(
             response.lowercased().contains("bob"),
             "Model should recognize the name 'Bob' from the injected history, proving successful prompt re-hydration."
+        )
+    }
+
+    func testPromptRehydrationTurboKVCache() async throws {
+        let history: [Chat.Message] = [
+            .system("You are a helpful assistant."),
+            .user("My name is Bob."),
+            .assistant("Hello Bob! How can I help you today?"),
+        ]
+
+        let session = ChatSession(
+            Self.llmContainer,
+            history: history,
+            generateParameters: turboGenerateParameters()
+        )
+
+        let response = try await session.respond(to: "What is my name? Answer in a short sentence.")
+
+        print("Turbo rehydration result:", response)
+
+        XCTAssertTrue(
+            response.lowercased().contains("bob"),
+            "Model should recognize the name 'Bob' from injected history with Turbo KV cache"
         )
     }
 }
