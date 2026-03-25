@@ -8,6 +8,7 @@ import Testing
     arguments: [
         ({ KVCacheSimple() }),
         ({ RotatingKVCache(maxSize: 32) }),
+        ({ TurboKVCache(bits: 3.5) }),
         ({ QuantizedKVCache() }),
         ({ ChunkedKVCache(chunkSize: 16) }),
         ({ ArraysCache(size: 2) }),
@@ -24,6 +25,8 @@ func testCacheSerialization(creator: (() -> any KVCache)) async throws {
             arrays[1] = values
         case let quantized as QuantizedKVCache:
             _ = quantized.updateQuantized(keys: keys, values: values)
+        case let turbo as TurboKVCache:
+            _ = turbo.update(keys: keys, values: values)
         default:
             _ = item.update(keys: keys, values: values)
         }

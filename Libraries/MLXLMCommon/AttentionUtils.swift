@@ -51,6 +51,15 @@ public func attentionWithCacheUpdate(
             mask: mask
         )
     }
+    if let turboKVCache = cache as? TurboKVCache {
+        return turboKVCache.attention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: scale,
+            mask: mask
+        )
+    }
     if let quantizedKVCache = cache as? QuantizedKVCacheProtocol {
         let (quantizedKeys, quantizedValues) = quantizedKVCache.updateQuantized(
             keys: keys, values: values)

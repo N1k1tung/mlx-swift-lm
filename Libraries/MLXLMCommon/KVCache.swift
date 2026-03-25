@@ -1176,6 +1176,8 @@ public func savePromptCache(
             return "KVCache"  // Python uses "KVCache" for the basic cache
         case is RotatingKVCache:
             return "RotatingKVCache"
+        case is TurboKVCache:
+            return "TurboKVCache"
         case is QuantizedKVCache:
             return "QuantizedKVCache"
         case is MambaCache:
@@ -1276,6 +1278,12 @@ public func loadPromptCache(
                     message: "Failed to parse RotatingKVCache maxSize from: \(info[1])")
             }
             cache = RotatingKVCache(maxSize: maxSize)  // Create with parsed maxSize
+        case "TurboKVCache":
+            let info = i < cacheInfo.count ? cacheInfo[i] : []
+            guard info.count >= 2, let bits = Double(info[1]) else {
+                throw KVCacheError(message: "Invalid TurboKVCache metaState")
+            }
+            cache = TurboKVCache(bits: bits)
         case "QuantizedKVCache":
             cache = QuantizedKVCache()
         case "ChunkedKVCache":
