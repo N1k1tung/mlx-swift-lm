@@ -1,3 +1,5 @@
+// adopted from https://github.com/Blaizzy/mlx-vlm/tree/pc/turbo-quant
+
 import Foundation
 import MLX
 @testable import MLXLMCommon

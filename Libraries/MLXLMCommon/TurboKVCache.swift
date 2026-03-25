@@ -1,5 +1,5 @@
 // Copyright © 2026 Apple Inc.
-
+// adopted from https://github.com/Blaizzy/mlx-vlm/tree/pc/turbo-quant
 import Foundation
 import MLX
 
