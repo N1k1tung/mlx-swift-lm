@@ -57,13 +57,9 @@ class PhiAttention: Module {
         values = values.reshaped(B, L, args.kvHeads, headDim).transposed(0, 2, 1, 3)
 
         // Add RoPE to the queries and keys and combine them with the cache
-        if let cache {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
-        } else {
-            queries = rope(queries)
-            keys = rope(keys)
-        }
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
         // Finally perform the attention computation
         let scale = sqrt(1 / Float(queries.dim(-1)))

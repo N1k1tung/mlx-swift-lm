@@ -245,13 +245,9 @@ class GraniteMoeHybridAttention: Module {
         values = values.reshaped(B, L, args.kvHeads, headDim).transposed(0, 2, 1, 3)
 
         if let rope {
-            if let cache {
-                queries = rope(queries, offset: cache.offset)
-                keys = rope(keys, offset: cache.offset)
-            } else {
-                queries = rope(queries, offset: 0)
-                keys = rope(keys, offset: 0)
-            }
+            let offset = cache?.ropeOffset
+            queries = applyRotaryPosition(rope, to: queries, offset: offset)
+            keys = applyRotaryPosition(rope, to: keys, offset: offset)
         }
 
         let output = attentionWithCacheUpdate(

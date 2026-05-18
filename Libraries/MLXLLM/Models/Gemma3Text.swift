@@ -140,7 +140,7 @@ class Gemma3Attention: Module {
     @ModuleInfo(key: "q_norm") var queryNorm: Gemma.RMSNorm
     @ModuleInfo(key: "k_norm") var keyNorm: Gemma.RMSNorm
 
-    @ModuleInfo var rope: OffsetLayer
+    @ModuleInfo var rope: RoPELayer
 
     init(_ config: Gemma3TextConfiguration, layerIdx: Int) {
         let dim = config.hiddenSize
@@ -197,13 +197,9 @@ class Gemma3Attention: Module {
         queries = queryNorm(queries)
         keys = keyNorm(keys)
 
-        if let cache {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
-        } else {
-            queries = rope(queries, offset: 0)
-            keys = rope(keys, offset: 0)
-        }
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: queries,
@@ -426,7 +422,7 @@ public class Gemma3TextModel: Module, LLMModel {
         _ input: LMInput, cache: [KVCache], windowSize: Int? = nil
     ) throws -> PrepareResult {
         let promptTokens = input.text.tokens
-        let promptCount = promptTokens.shape[0]
+        let promptCount = promptTokens.dim(0)
 
         guard promptCount > 0 else {
             print("Warning: Preparing with empty prompt tokens.")

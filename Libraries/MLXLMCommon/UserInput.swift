@@ -4,7 +4,6 @@
 import CoreImage
 import Foundation
 import MLX
-import Tokenizers
 
 public typealias Message = [String: any Sendable]
 
@@ -194,7 +193,7 @@ public struct UserInput {
     ///   - additionalContext: optional context (model specific)
     /// ### See Also
     /// - ``Prompt-swift.enum/text(_:)``
-    /// - ``init(chat:tools:additionalContext:)``
+    /// - ``init(chat:processing:tools:additionalContext:)``
     public init(
         prompt: String, images: [Image] = [Image](), videos: [Video] = [Video](),
         tools: [ToolSpec]? = nil,
@@ -203,6 +202,9 @@ public struct UserInput {
         self.prompt = .chat([
             .user(prompt, images: images, videos: videos)
         ])
+        // note: prompt.didSet is not triggered in init
+        self.images = images
+        self.videos = videos
         self.tools = tools
         self.additionalContext = additionalContext
     }
@@ -228,7 +230,7 @@ public struct UserInput {
     /// ]
     /// ```
     ///
-    /// Typically the ``init(chat:tools:additionalContext:)`` should be used instead
+    /// Typically the ``init(chat:processing:tools:additionalContext:)`` should be used instead
     /// along with a model specific ``MessageGenerator`` (supplied by the ``UserInputProcessor``).
     ///
     /// - Parameters:
@@ -239,7 +241,7 @@ public struct UserInput {
     ///   - additionalContext: optional context (model specific)
     /// ### See Also
     /// - ``Prompt-swift.enum/text(_:)``
-    /// - ``init(chat:tools:additionalContext:)``
+    /// - ``init(chat:processing:tools:additionalContext:)``
     public init(
         messages: [Message], images: [Image] = [Image](), videos: [Video] = [Video](),
         tools: [ToolSpec]? = nil,
@@ -274,7 +276,7 @@ public struct UserInput {
     ///   - additionalContext: optional context (model specific)
     /// ### See Also
     /// - ``Prompt-swift.enum/text(_:)``
-    /// - ``init(chat:tools:additionalContext:)``
+    /// - ``init(chat:processing:tools:additionalContext:)``
     public init(
         chat: [Chat.Message],
         processing: Processing = .init(),
@@ -298,7 +300,7 @@ public struct UserInput {
 
     /// Initialize the `UserInput` with a preconfigured ``Prompt-swift.enum``.
     ///
-    /// ``init(chat:tools:additionalContext:)`` is the preferred mechanism.
+    /// ``init(chat:processing:tools:additionalContext:)`` is the preferred mechanism.
     ///
     /// - Parameters:
     ///   - prompt: the prompt
@@ -309,7 +311,7 @@ public struct UserInput {
     ///   - additionalContext: optional context (model specific)
     /// ### See Also
     /// - ``Prompt-swift.enum/text(_:)``
-    /// - ``init(chat:tools:additionalContext:)``
+    /// - ``init(chat:processing:tools:additionalContext:)``
     public init(
         prompt: Prompt,
         images: [Image] = [Image](),
@@ -318,12 +320,18 @@ public struct UserInput {
         tools: [ToolSpec]? = nil, additionalContext: [String: any Sendable]? = nil
     ) {
         self.prompt = prompt
+        // note: prompt.didSet is not triggered in init
         switch prompt {
         case .text, .messages:
             self.images = images
             self.videos = videos
-        case .chat:
-            break
+        case .chat(let messages):
+            self.images = messages.reduce(into: []) { result, message in
+                result.append(contentsOf: message.images)
+            }
+            self.videos = messages.reduce(into: []) { result, message in
+                result.append(contentsOf: message.videos)
+            }
         }
         self.processing = processing
         self.tools = tools

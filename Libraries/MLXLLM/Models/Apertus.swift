@@ -2,7 +2,6 @@ import Foundation
 import MLX
 import MLXLMCommon
 import MLXNN
-import Tokenizers
 
 // port of https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/models/apertus.py
 
@@ -224,17 +223,15 @@ private class ApertusAttention: Module {
         values = values.transposed(0, 2, 1, 3)
 
         // 4. RoPE
-        if let cache = cache {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
+        if let cache = cache {
             // Update cache (expects [B, H, L, D])
             let (k, v) = cache.update(keys: keys, values: values)
             keys = k
             values = v
-        } else {
-            queries = rope(queries, offset: 0)
-            keys = rope(keys, offset: 0)
         }
 
         // 5. Attention (SDPA expects [B, H, L, D])

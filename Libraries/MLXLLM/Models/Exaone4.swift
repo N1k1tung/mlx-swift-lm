@@ -71,12 +71,10 @@ class Exaone4Attention: Module {
         keys = kNorm(keys.reshaped(B, L, args.kvHeads, -1)).transposed(0, 2, 1, 3)
         values = values.reshaped(B, L, args.kvHeads, -1).transposed(0, 2, 1, 3)
 
-        if let cache, useRope, let rope {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
-        } else if useRope, let rope {
-            queries = rope(queries, offset: 0)
-            keys = rope(keys, offset: 0)
+        if useRope, let rope {
+            let offset = cache?.ropeOffset
+            queries = applyRotaryPosition(rope, to: queries, offset: offset)
+            keys = applyRotaryPosition(rope, to: keys, offset: offset)
         }
 
         let output = attentionWithCacheUpdate(

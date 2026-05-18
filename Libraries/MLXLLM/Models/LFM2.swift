@@ -157,13 +157,9 @@ class LFM2Attention: Module {
         keys = kLayerNorm(keys.reshaped(B, L, args.kvHeads, -1)).transposed(0, 2, 1, 3)
         values = values.reshaped(B, L, args.kvHeads, -1).transposed(0, 2, 1, 3)
 
-        if let cache {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
-        } else {
-            queries = rope(queries)
-            keys = rope(keys)
-        }
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: queries,
@@ -391,7 +387,7 @@ public class LFM2Model: Module, LLMModel, KVCacheDimensionProvider {
             var sanitizedParam = param
 
             if name.contains("conv.weight") {
-                if param.shape[param.shape.count - 1] > param.shape[1] {
+                if param.shape[param.shape.count - 1] > param.dim(1) {
                     sanitizedParam = param.transposed(0, 2, 1)
                 }
             }

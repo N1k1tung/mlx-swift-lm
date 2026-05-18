@@ -9,11 +9,9 @@
 
 import CoreImage
 import Foundation
-import Hub
 import MLX
 import MLXLMCommon
 import MLXNN
-import Tokenizers
 
 // MARK: - Language
 
@@ -833,7 +831,8 @@ public struct GlmOcrProcessor: UserInputProcessor {
     public func prepare(input: UserInput) async throws -> LMInput {
         let messages = GlmOcrMessageGenerator().generate(from: input)
 
-        var promptTokens = try tokenizer.applyChatTemplate(messages: messages)
+        var promptTokens = try tokenizer.applyChatTemplate(
+            messages: messages, tools: input.tools, additionalContext: input.additionalContext)
 
         // Text-only input
         if input.images.isEmpty, input.videos.isEmpty {

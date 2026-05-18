@@ -67,13 +67,9 @@ class OlmoEAttention: Module {
         keys = keys.reshaped(B, L, nKVHeads, -1).transposed(0, 2, 1, 3)
         values = values.reshaped(B, L, nKVHeads, -1).transposed(0, 2, 1, 3)
 
-        if let cache {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
-        } else {
-            queries = rope(queries, offset: 0)
-            keys = rope(keys, offset: 0)
-        }
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: queries,

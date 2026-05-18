@@ -78,13 +78,9 @@ class MultiHeadCausalAttention: Module {
             keys = kNorm(keys)
         }
 
-        if let cache {
-            queries = rope(queries, offset: cache.offset)
-            keys = rope(keys, offset: cache.offset)
-        } else {
-            queries = rope(queries)
-            keys = rope(keys)
-        }
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: queries,

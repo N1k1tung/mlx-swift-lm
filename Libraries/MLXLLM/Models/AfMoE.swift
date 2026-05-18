@@ -197,13 +197,9 @@ class AfMoEAttention: Module {
 
         // Apply RoPE only for local (sliding window) attention
         if isLocalAttention, let rope = rope {
-            if let cache = cache {
-                queries = rope(queries, offset: cache.offset)
-                keys = rope(keys, offset: cache.offset)
-            } else {
-                queries = rope(queries, offset: 0)
-                keys = rope(keys, offset: 0)
-            }
+            let offset = cache?.ropeOffset
+            queries = applyRotaryPosition(rope, to: queries, offset: offset)
+            keys = applyRotaryPosition(rope, to: keys, offset: offset)
         }
 
         var output = attentionWithCacheUpdate(

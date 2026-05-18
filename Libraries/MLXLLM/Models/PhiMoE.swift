@@ -91,13 +91,9 @@ class PhiMoEAttention: Module {
         var k = keys.reshaped(B, L, args.kvHeads, -1).transposed(0, 2, 1, 3)
         let v = values.reshaped(B, L, args.kvHeads, -1).transposed(0, 2, 1, 3)
 
-        if let cache {
-            q = rope(q, offset: cache.offset)
-            k = rope(k, offset: cache.offset)
-        } else {
-            q = rope(q)
-            k = rope(k)
-        }
+        let offset = cache?.ropeOffset
+        q = applyRotaryPosition(rope, to: q, offset: offset)
+        k = applyRotaryPosition(rope, to: k, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: q,

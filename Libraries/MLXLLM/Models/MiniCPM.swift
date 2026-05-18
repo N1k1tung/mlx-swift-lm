@@ -54,9 +54,9 @@ final class MiniCPMAttention: Module {
         keys = keys.reshaped(B, L, args.kvHeads, -1).transposed(0, 2, 1, 3)
         values = values.reshaped(B, L, args.kvHeads, -1).transposed(0, 2, 1, 3)
 
-        let offset = cache?.offset ?? 0
-        queries = rope(queries, offset: offset)
-        keys = rope(keys, offset: offset)
+        let offset = cache?.ropeOffset
+        queries = applyRotaryPosition(rope, to: queries, offset: offset)
+        keys = applyRotaryPosition(rope, to: keys, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: queries,

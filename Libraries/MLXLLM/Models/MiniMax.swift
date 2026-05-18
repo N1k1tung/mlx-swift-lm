@@ -77,13 +77,9 @@ class MiniMaxAttention: Module {
         var k = keys.reshaped(B, L, numKeyValueHeads, -1).transposed(0, 2, 1, 3)
         let v = values.reshaped(B, L, numKeyValueHeads, -1).transposed(0, 2, 1, 3)
 
-        if let cache {
-            q = rope(q, offset: cache.offset)
-            k = rope(k, offset: cache.offset)
-        } else {
-            q = rope(q)
-            k = rope(k)
-        }
+        let offset = cache?.ropeOffset
+        q = applyRotaryPosition(rope, to: q, offset: offset)
+        k = applyRotaryPosition(rope, to: k, offset: offset)
 
         let output = attentionWithCacheUpdate(
             queries: q,
@@ -232,7 +228,7 @@ public class MiniMaxModel: Module, LLMModel, KVCacheDimensionProvider {
         func dequant(weight: MLXArray, scaleInv: MLXArray) -> MLXArray {
             let dtype = weight.dtype
             let bs = 128
-            let (m, n) = (weight.shape[0], weight.shape[1])
+            let (m, n) = (weight.dim(0), weight.dim(1))
             let padBottom = (bs - m % bs) % bs
             let padSide = (bs - n % bs) % bs
 
