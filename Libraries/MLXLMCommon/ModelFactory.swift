@@ -171,12 +171,13 @@ extension GenericModelFactory {
         using tokenizerLoader: any TokenizerLoader,
         configuration: ModelConfiguration,
         useLatest: Bool = false,
+        lazy: Bool = false,
         progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
     ) async throws -> ContainerType {
         let resolved = try await resolve(
             configuration: configuration, from: downloader,
             useLatest: useLatest, progressHandler: progressHandler)
-        let context = try await _load(configuration: resolved, tokenizerLoader: tokenizerLoader)
+        let context = try await _load(configuration: resolved, lazy: lazy, tokenizerLoader: tokenizerLoader)
         return _wrap(context)
     }
 
@@ -186,19 +187,21 @@ extension GenericModelFactory {
     /// the given directory.
     public func load(
         from directory: URL,
+        lazy: Bool = false,
         using tokenizerLoader: any TokenizerLoader
     ) async throws -> sending ContextType {
         try await _load(
-            configuration: .init(directory: directory), tokenizerLoader: tokenizerLoader)
+            configuration: .init(directory: directory), lazy: lazy, tokenizerLoader: tokenizerLoader)
     }
 
     /// Load a model from a local directory, producing a ``ModelContainer``.
     public func loadContainer(
         from directory: URL,
+        lazy: Bool = false,
         using tokenizerLoader: any TokenizerLoader
     ) async throws -> ContainerType {
         let context = try await _load(
-            configuration: .init(directory: directory), lazy: false, tokenizerLoader: tokenizerLoader)
+            configuration: .init(directory: directory), lazy: lazy, tokenizerLoader: tokenizerLoader)
         return _wrap(context)
     }
 
